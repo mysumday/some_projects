@@ -3,3 +3,6 @@ class InterfaceException(Exception):
 
 class InterfaceOpenAIException(InterfaceException):
     pass
+
+class UnknownModelException(InterfaceOpenAIException):
+    pass
