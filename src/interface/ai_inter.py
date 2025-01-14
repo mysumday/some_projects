@@ -1,10 +1,9 @@
 import json
 import inspect
-from pyexpat.errors import messages
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 from openai import OpenAI, OpenAIError
-from pandas import DataFrame, Series
+from pandas import DataFrame
 
 from src.interface.exceptions import InterfaceException, InterfaceOpenAIException, \
     UnknownModelException
@@ -12,7 +11,6 @@ from src.logger import logger
 
 
 from src.interface.prompts import PROMPT_TEMPLATE, PROMPT_TEMPLATE_ERROR
-from src.transforms import trasform_funcs
 from private import env
 
 class AIInterface:
@@ -76,7 +74,7 @@ class AIInterface:
         self.commands[name] = command
 
     def add_modules_commands(self, modules: list[object]) -> None:
-        """parses functions inside a modules in the list and addes them to the class"""
+        """parses functions inside a modules in the list and adds them to the class"""
         for module in modules:
             logger.info(f"Adding module: %s", module.__name__)
             for _, func in inspect.getmembers(module, inspect.isfunction):
@@ -155,7 +153,7 @@ class AIInterface:
             "role": "user",
             "content" : [{
                 "type" : "text",
-                "text" : user,
+                "text" : user_request,
             }]
         })
         return result
@@ -214,11 +212,15 @@ class AIInterface:
                 raise InterfaceException(f"Command {comm_name} not supported.")
 
             try:
+                #TODO TEST THIS AND ADD DEBUG
+                if comm_args.get("predicate"):
+                    comm_args["predicate"] = eval(comm_args["predicate"])
+
                 new_df = self.commands[comm_name](new_df, **comm_args)
             except KeyError as e:
                 raise InterfaceException(f"Command {comm_name} with args {comm_args}"
                                          f"gave an error: {e}")
-            return new_df
+        return new_df
 
     def transform(self, df: DataFrame, user_request: str) -> DataFrame:
         prompt = self._get_prompt()
@@ -238,6 +240,6 @@ class AIInterface:
 if __name__ == '__main__':
     user = ("I need to rename the Column x to my Column and also remove the rows with the empty "
             "values and then save this file as test.csv")
-    from src.transforms import trasform_funcs as trasform
-    x = AIInterface(load_modules=[trasform])
-    y = x.transform(df=None, user_request=user)
+    from src.transforms import trasform_funcs as transform
+    x = AIInterface(load_modules=[transform])
+    y = x.transform(df=..., user_request=user)
