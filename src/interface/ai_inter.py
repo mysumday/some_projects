@@ -56,6 +56,7 @@ class AIInterface:
 
         self._commands_updated = False
         self._available_commands = None
+        self._backup: list[DataFrame] = []
 
 
         if load_modules:
@@ -198,14 +199,19 @@ class AIInterface:
 
         return result
 
+    def _back_frame(self, df: DataFrame) -> None:
+        self._backup.append(df.copy(deep=True))
+
+    def get_last_frame(self) -> DataFrame:
+        return self._backup.pop()
+
+    def reset_frame(self) -> DataFrame:
+        return self._backup[0] if self._backup else DataFrame()
 
     def _apply_commands(self,
         df: DataFrame,
         commands: dict[str, dict[str, str]] ,
     ) -> DataFrame:
-        # backup dataframe
-        new_df = df.copy(deep=True)
-
         for comm_name, comm_args in commands.items():
             logger.info(f"Applying command: %s with %s", comm_name, comm_args)
             if comm_name not in self.commands:
@@ -216,13 +222,14 @@ class AIInterface:
                 if comm_args.get("predicate"):
                     comm_args["predicate"] = eval(comm_args["predicate"])
 
-                new_df = self.commands[comm_name](new_df, **comm_args)
+                df = self.commands[comm_name](df, **comm_args)
             except KeyError as e:
                 raise InterfaceException(f"Command {comm_name} with args {comm_args}"
                                          f"gave an error: {e}")
-        return new_df
+        return df
 
     def transform(self, df: DataFrame, user_request: str) -> DataFrame:
+        self._back_frame(df)
         prompt = self._get_prompt()
         messages_list = self._get_messages(user_request, system=prompt)
         commands = self._send_request(
