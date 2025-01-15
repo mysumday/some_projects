@@ -228,19 +228,37 @@ class AIInterface:
                                          f"gave an error: {e}")
         return df
 
-    def transform(self, df: DataFrame, user_request: str) -> DataFrame:
+    def transform(self, df: DataFrame, user_request: str, retry_count: int=3) -> DataFrame:
         self._back_frame(df)
         prompt = self._get_prompt()
         messages_list = self._get_messages(user_request, system=prompt)
-        commands = self._send_request(
-                messages_list=messages_list,
-                model=self.default_settings["model"],
-                temperature=self.default_settings["temperature"],
-                top_p=self.default_settings["top_p"],
-                frequancy_penalty=self.default_settings["presence_penalty"],
-        )
-        logger.info(f"Commands received: {commands}")
-        return self._apply_commands(df, commands)
+
+        def _request_and_apply(dfr: DataFrame, messages) -> None:
+            commands = self._send_request(
+                    messages_list=messages_list,
+                    model=self.default_settings["model"],
+                    temperature=self.default_settings["temperature"],
+                    top_p=self.default_settings["top_p"],
+                    frequancy_penalty=self.default_settings["presence_penalty"],
+            )
+            logger.info(f"Commands received: {commands}")
+            self._apply_commands(dfr, commands)
+
+        for retry in range(retry_count + 1):
+            try:
+                _request_and_apply(df, messages_list)
+                break
+            except InterfaceException as e:
+                if retry < retry_count:
+                    logger.warning("Error during execution occurred, retry started.")
+                    df = self.get_last_frame()
+                    # TODO
+                    prompt = self._get_error_prompty("I Guess Error msg must go here")
+                    messages_list = self._get_messages(user_request=prompt, previous=messages_list)
+                else:
+                    logger.warning("Limit of retries reached. Execution aborted.")
+                    df = self.reset_frame()
+        return df
 
 
 
