@@ -1,5 +1,5 @@
-import json
 import inspect
+import json
 from typing import Callable, Optional
 
 from openai import OpenAI, OpenAIError
@@ -7,10 +7,8 @@ from pandas import DataFrame
 
 from src.interface.exceptions import InterfaceException, InterfaceOpenAIException, \
     UnknownModelException
+from src.interface.prompts import PROMPT_TEMPLATE
 from src.logger import logger
-
-
-from src.interface.prompts import PROMPT_TEMPLATE, PROMPT_TEMPLATE_ERROR
 from private import env
 
 class AIInterface:
@@ -19,19 +17,19 @@ class AIInterface:
     with OpenAI's API to generate and apply commands on a DataFrame.
     """
     _PROMPT_TEMPLATE: str = PROMPT_TEMPLATE
-    _PROMPT_TEMPLATE_ERROR: str = PROMPT_TEMPLATE_ERROR
 
     _tested_models: list[str] = ["gbt-4"]
 
     default_settings = {
-        "model" : "gpt-4",
-        "temperature" : 0.75,
-        "top_p" : 0.9,
-        "frequancy_penalty" : 0.0,
+        "model"            : "gpt-4",
+        "temperature"      : 0.75,
+        "top_p"            : 0.9,
+        "frequancy_penalty": 0.0,
         "presence_penalty" : 0.0,
     }
 
-    def __init__(self, *,
+    def __init__(
+            self, *,
             load_modules: Optional[list[object]],
             model: Optional[str] = None,
             temperature: Optional[float] = 0.75,
@@ -52,12 +50,11 @@ class AIInterface:
         self.commands_description: dict[str, str] = {}
         self.commands: dict[str, Callable] = {}
 
-        #primitive cashing
+        # primitive cashing
 
         self._commands_updated = False
         self._available_commands = None
         self._backup: list[DataFrame] = []
-
 
         if load_modules:
             self.add_modules_commands(load_modules)
@@ -90,7 +87,8 @@ class AIInterface:
         if self._available_commands:
             return "\n".join(self._available_commands)
 
-    def llm_settings(self, *,
+    def llm_settings(
+            self, *,
             model_name: Optional[str] = None,
             temperature: Optional[float] = None,
             top_p: Optional[float] = None,
@@ -116,19 +114,17 @@ class AIInterface:
             logger.debug(f"Using presence penalty: {presence_penalty}")
             self.default_settings["presence_penalty"] = presence_penalty
 
-
     def _get_prompt(self):
         """Creating a formatted prompt"""
         return self._PROMPT_TEMPLATE.format(commands=self._get_available_commands())
-
 
     @staticmethod
     def _get_messages(
             user_request: str,
             *,
             system: str = None,
-            previous: list[dict[str,str]] = None
-    ) -> list[dict[str, str|list]]:
+            previous: list[dict[str, str]] = None
+    ) -> list[dict[str, str | list]]:
         """Create messages request"""
 
         if system and previous:
@@ -137,36 +133,43 @@ class AIInterface:
         result: list[dict[str, str]] = []
         if system:
             logger.debug("System messages requested")
-            result.append({
-                "role": "system",
-                "content" : [{
-                    "type" : "text",
-                    "text" : system,
-                }]
-            })
+            result.append(
+                    {
+                        "role"   : "system",
+                        "content": [{
+                            "type": "text",
+                            "text": system,
+                        }]
+                    }
+            )
         elif previous:
             logger.debug("Previous messages requested")
             result.extend(previous)
         else:
-            raise InterfaceException("Neither 'system' nor 'previous' commands provided to create messages.")
+            raise InterfaceException(
+                    "Neither 'system' nor 'previous' commands provided to create messages."
+            )
 
-        result.append({
-            "role": "user",
-            "content" : [{
-                "type" : "text",
-                "text" : user_request,
-            }]
-        })
+        result.append(
+                {
+                    "role"   : "user",
+                    "content": [{
+                        "type": "text",
+                        "text": user_request,
+                    }]
+                }
+        )
         return result
 
-    def _send_request(self,
+    def _send_request(
+            self,
             messages_list: list[dict[str, str]],
             model: str = "gpt-4",
             temperature: float = 1,
             top_p: float = 0.9,
             frequancy_penalty: float = 0.0,
             presence_penalty: float = 0.0,
-    ) -> dict[str,dict[str, str]]:
+    ) -> dict[str, dict[str, str]]:
         """Send request to LLM with messages"""
         try:
             response = self._client.chat.completions.create(
@@ -174,7 +177,7 @@ class AIInterface:
                     messages=messages_list,
                     frequency_penalty=frequancy_penalty,
                     response_format={
-                        "type":"text",
+                        "type": "text",
                     },
                     temperature=temperature,
                     top_p=top_p,
@@ -190,12 +193,12 @@ class AIInterface:
         result = {}
         if not response_text:
             logger.warning("Response did not return anything.")
-            #TODO IMPLEMENT LOGIC FOR NO RESPONSE
+            # TODO IMPLEMENT LOGIC FOR NO RESPONSE
         try:
             result = json.loads(response_text)
         except json.decoder.JSONDecodeError as e:
             logger.critical("Response is not valid JSON. %s", e)
-            #TODO LOGIC FOR HANDLING THAT
+            # TODO LOGIC FOR HANDLING THAT
 
         return result
 
@@ -208,9 +211,10 @@ class AIInterface:
     def reset_frame(self) -> DataFrame:
         return self._backup[0] if self._backup else DataFrame()
 
-    def _apply_commands(self,
-        df: DataFrame,
-        commands: dict[str, dict[str, str]] ,
+    def _apply_commands(
+            self,
+            df: DataFrame,
+            commands: dict[str, dict[str, str]],
     ) -> DataFrame:
         for comm_name, comm_args in commands.items():
             logger.info(f"Applying command: %s with %s", comm_name, comm_args)
@@ -218,24 +222,26 @@ class AIInterface:
                 raise InterfaceException(f"Command {comm_name} not supported.")
 
             try:
-                #TODO TEST THIS AND ADD DEBUG
+                # TODO TEST THIS AND ADD DEBUG
                 if comm_args.get("predicate"):
                     comm_args["predicate"] = eval(comm_args["predicate"])
 
                 df = self.commands[comm_name](df, **comm_args)
             except KeyError as e:
-                raise InterfaceException(f"Command {comm_name} with args {comm_args}"
-                                         f"gave an error: {e}")
+                raise InterfaceException(
+                        f"Command {comm_name} with args {comm_args}"
+                        f"gave an error: {e}"
+                )
         return df
 
-    def transform(self, df: DataFrame, user_request: str, retry_count: int=3) -> DataFrame:
+    def transform(self, df: DataFrame, user_request: str, retry_count: int = 3) -> DataFrame:
         self._back_frame(df)
         prompt = self._get_prompt()
         messages_list = self._get_messages(user_request, system=prompt)
 
         def _request_and_apply(dfr: DataFrame, messages) -> None:
             commands = self._send_request(
-                    messages_list=messages_list,
+                    messages_list=messages,
                     model=self.default_settings["model"],
                     temperature=self.default_settings["temperature"],
                     top_p=self.default_settings["top_p"],
@@ -252,8 +258,8 @@ class AIInterface:
                 if retry < retry_count:
                     logger.warning("Error during execution occurred, retry started.")
                     df = self.get_last_frame()
-                    # TODO
-                    prompt = self._get_error_prompty("I Guess Error msg must go here")
+                    prompt = (f"Given commands failed to execute.\nTraceback {e}.\n"
+                              f"Fix the problem and try again.")
                     messages_list = self._get_messages(user_request=prompt, previous=messages_list)
                 else:
                     logger.warning("Limit of retries reached. Execution aborted.")
@@ -261,10 +267,10 @@ class AIInterface:
         return df
 
 
-
 if __name__ == '__main__':
     user = ("I need to rename the Column x to my Column and also remove the rows with the empty "
             "values and then save this file as test.csv")
     from src.transforms import trasform_funcs as transform
+
     x = AIInterface(load_modules=[transform])
     y = x.transform(df=..., user_request=user)
